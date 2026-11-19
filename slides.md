@@ -1,6 +1,7 @@
 ---
 theme: default
 colorSchema: light
+selectable: true
 title: Generalized Isolation Levels
 info: |
   Reading club: Adya, Liskov, O'Neil — "Generalized Isolation Level Definitions" (ICDE 2000).
@@ -25,10 +26,6 @@ Atul Adya · Barbara Liskov · Patrick O’Neil<br/>
 ICDE 2000
 </div>
 
-<!--
-Slides marked ADDED are new compared with the original PPTX deck.
-To hide the markers: set `.new { display: none }` in style.css.
--->
 
 ---
 
@@ -60,7 +57,7 @@ Phenomena P0–P3 fixed the ambiguities, but they forbid *overlapping operations
 
 ---
 
-# Notation used in the paper <span class="new">ADDED</span>
+# Notation used in the paper
 
 <div class="grid grid-cols-2 gap-8">
 <div>
@@ -95,7 +92,7 @@ Being able to read this notation makes the rest of the paper much easier to foll
 
 ---
 
-# The 1995 phenomena and their locking origin <span class="new">ADDED</span>
+# The 1995 phenomena and their locking origin
 
 ```text
 P0: w1[x] ... w2[x] ... (c1 or a1)        dirty write
@@ -160,31 +157,45 @@ With MVCC, T1 can read the old version of x both times. The result is then equiv
 
 ---
 
-# Same overlap, different outcome <span class="new">ADDED</span>
+# Same overlap, different outcome
 
-Invariant **x + y = 10**. Start state: x = 5, y = 5.
+T1 moves 4 from x to y. Invariant **x + y = 10**, start x = 5, y = 5.
+
+<div class="grid grid-cols-2 gap-8">
+<div>
+
+**H1**: bad
 
 ```text
-H1 : r1(x,5) w1(x,1) r2(x,1) r2(y,5) c2 r1(y,5) w1(y,9) c1     T2 sees x+y = 6   ✗
-H1': r1(x,5) w1(x,1) r1(y,5) w1(y,9) r2(x,1) r2(y,9) c1 c2     T2 sees x+y = 10  ✓  (≡ T1;T2)
-
-H2 : r2(x,5) r1(x,5) w1(x,1) r1(y,5) w1(y,9) c1 r2(y,9) c2     T2 sees x+y = 14  ✗
-H2': r2(x,5) r1(x,5) w1(x,1) r1(y,5) r2(y,5) w1(y,9) c2 c1     T2 sees x+y = 10  ✓  (≡ T2;T1)
+T1: write x = 1
+T2: read x → 1
+T2: read y → 5      sum = 6  ✗
+T2: commit
+T1: write y = 9
+T1: commit
 ```
 
-<div class="mt-4">
+</div>
+<div>
 
-- P1 forbids **H1 and H1'**: both contain a read of uncommitted data.
-- P2 forbids **H2 and H2'**: both overwrite something an uncommitted transaction read.
-- An optimistic or multi-version system would accept the ✓ histories and reject the ✗ ones.
+**H1'**: fine, equivalent to T1 ; T2
+
+```text
+T1: write x = 1
+T1: write y = 9
+T2: read x → 1
+T2: read y → 9      sum = 10 ✓
+T1: commit
+T2: commit
+```
 
 </div>
+</div>
 
-<div class="mt-4">
+Both read T1’s uncommitted x, so **P1 bans both**. Only H1 is actually wrong.
+(P2 has the same problem; see H2 / H2' in §3 of the paper.)
 
 **Root cause:** P0–P3 are *single-object* rules guarding *multi-object* invariants, so they must over-restrict.
-
-</div>
 
 ---
 
@@ -225,18 +236,17 @@ A total order over the *committed* versions of each object. It does not have to 
 </div>
 </div>
 
-Example <span class="new">ADDED</span>
-
 ```text
 H_write-order: w1(x1) w2(x2) w2(y2) c1 c2 r3(x1) w3(x3) w4(y4) a4     [x2 ≪ x1]
 ```
 
-T1 commits first, but the system puts x2 **before** x1, so T2 is serialized before T1.
-T3 (uncommitted) and T4 (aborted) add no constraints.
+- T1 commits first, but the system puts x2 **before** x1, so T2 is serialized before T1.
+- x3 (T3 uncommitted) and y4 (T4 aborted) are **not** in the version order, so they add no constraints.
 
 <!--
 The version order is the key that lets the model describe OCC and MVCC systems.
 The ordering is chosen by the system, not dictated by time.
+Under 1995 rules this example is a dirty write (P0); under Adya there is no G0 (a single ww edge T2→T1).
 -->
 
 ---
@@ -354,7 +364,7 @@ Serializable as **T0, T1, T3, T2**, even though T3 saw T2’s version.
 
 ---
 
-# Predicate rw edges conflict less than predicate locks <span class="new">ADDED</span>
+# Predicate rw edges conflict less than predicate locks
 
 <div class="grid grid-cols-2 gap-6">
 <div class="box">
@@ -408,7 +418,7 @@ Unlike P0, G0 lets *uncommitted* transactions write the same object concurrently
 
 ---
 
-# Why forbid dirty writes at all? <span class="new">ADDED</span>
+# Why forbid dirty writes at all?
 
 The paper gives two reasons for P0:
 
@@ -423,7 +433,25 @@ PL-1 is still weak. Predicate updates can interleave:
 H_pred-update: w1(x1) r2(Dept=Sales: x1; y_init) w1(y1) w2(x2) c1 c2
 ```
 
+<div class="grid grid-cols-2 gap-6">
+<div>
+
 T1 adds employees x and y to Sales. T2 gives Sales a raise and gets **x but not y**. This is allowed at PL-1: there is no ww cycle.
+
+<div class="small muted mt-2">Dashed = predicate edges; PL-1 ignores them. The cycle they form is G2, forbidden only at PL-3.</div>
+
+</div>
+<div>
+
+```mermaid {scale: 0.9}
+flowchart LR
+  T1 -- "ww (x)" --> T2
+  T1 -. "wr (pred: x1)" .-> T2
+  T2 -. "rw (pred: y1)" .-> T1
+```
+
+</div>
+</div>
 
 <!--
 Answers the open question from the notes: "ANSI SQL isolation should be modified to require P0 for all
@@ -456,7 +484,51 @@ Together: every committed read saw a state that existed, or will exist, in the c
 
 ---
 
-# PL-2 is weaker than “no dirty reads” <span class="new">ADDED</span>
+# G1c example: each one saw the other
+
+Both start with x = 0, y = 0.
+
+<div class="grid grid-cols-2 gap-8">
+<div>
+
+```text
+T1: write x = 1
+T2: write y = 1
+T1: read y → 1     (T2's uncommitted write)
+T2: read x → 1     (T1's uncommitted write)
+T1: commit
+T2: commit
+```
+
+```text
+w1(x1) w2(y2) r1(y2) r2(x1) c1 c2
+```
+
+</div>
+<div>
+
+```mermaid {scale: 0.9}
+flowchart LR
+  T1 -- "wr (x)" --> T2
+  T2 -- "wr (y)" --> T1
+```
+
+</div>
+</div>
+
+- No G1a (both commit) and no G1b (both read final versions), yet the result is impossible.
+- In any serial order, the first transaction must read 0. Here both read 1.
+- Only possible when uncommitted data can be read. That is why PL-2 needs G1c on top of G1a/G1b.
+
+<!--
+Locking RC: each read waits for the other's long write lock → deadlock, one aborts.
+MVCC RC (Postgres): each reads the committed 0 → no cycle (edges become rw instead of wr).
+G1c includes G0: a cycle of only ww edges is also a cycle of "ww or wr" edges.
+-->
+
+---
+
+# PL-2 is weaker than “no dirty reads”
 
 ```text
 H1': r1(x,5) w1(x,1) r1(y,5) w1(y,9) r2(x,1) r2(y,9) c1 c2
@@ -503,6 +575,46 @@ flowchart LR
 
 ---
 
+# G2 example: T2 sees half of a transfer
+
+T1 moves 4 from x to y. Invariant **x + y = 10**, start x = 5, y = 5. (Paper’s H2.)
+
+<div class="grid grid-cols-2 gap-8">
+<div>
+
+```text
+T2: read x → 5
+T1: read x → 5, write x = 1
+T1: read y → 5, write y = 9
+T1: commit
+T2: read y → 9      sum = 14  ✗
+T2: commit
+```
+
+```text
+r2(x0) r1(x0) w1(x1) r1(y0) w1(y1) c1 r2(y1) c2
+```
+
+</div>
+<div>
+
+```mermaid {scale: 0.9}
+flowchart LR
+  T1 -- "wr (y)" --> T2
+  T2 -- "rw (x)" --> T1
+```
+
+- **T2 –rw→ T1**: T2 read x0, T1 installed the next version x1
+- **T1 –wr→ T2**: T2 read T1’s y1
+
+</div>
+</div>
+
+No dirty read: everything T2 read was committed, so PL-2 allows it. The rw edge closes a cycle, so **PL-3 forbids it**.
+If T2 had read y0 instead (H2'), only the rw edge remains: no cycle, serial order **T2 ; T1**.
+
+---
+
 # The isolation ladder
 
 | Portable level | ANSI analogue | Forbids | Ti can commit only if… |
@@ -512,12 +624,17 @@ flowchart LR
 | **PL-2.99** | REPEATABLE READ | G1, G2-item | it is fully isolated for items; PL-2 guarantees for predicates |
 | **PL-3** | SERIALIZABLE | G1, G2 | everything happened before or after every other transaction |
 
-```mermaid
+```mermaid {scale: 0.8}
 flowchart LR
   A["PL-1: no ww cycles"] --> B["PL-2: no ww/wr cycles, no bad reads"] --> C["PL-2.99: no item cycles"] --> D["PL-3: no cycles"]
 ```
 
 <div class="muted small">These are the paper’s proposed portable definitions, not a statement about any vendor’s labels.</div>
+
+<style>
+table { font-size: 0.8em; }
+td, th { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+</style>
 
 ---
 
@@ -551,6 +668,45 @@ The cycle exists **only** because of the predicate rw edge. G2 catches it; G2-it
 
 ---
 
+# Phantom example in SQL
+
+Sales has x and y (salary 10 each). A stored `dept_total` row says 20.
+
+```text
+T1: SELECT sum(salary) FROM emp WHERE dept = 'Sales'          → 20
+T2: INSERT INTO emp VALUES ('z', 'Sales', 10)
+T2: UPDATE dept_total SET total = 30 WHERE dept = 'Sales'
+T2: COMMIT
+T1: SELECT total FROM dept_total WHERE dept = 'Sales'          → 30 ≠ 20  ✗
+```
+
+<div class="grid grid-cols-2 gap-8">
+<div>
+
+- **No item rw edge**: nothing T1 read (x, y) was overwritten.
+- **T1 –rw (predicate)→ T2**: z did not exist yet, but now matches T1’s query.
+- **T2 –wr→ T1**: T1 read T2’s total.
+
+</div>
+<div>
+
+The cycle needs the predicate edge, so **PL-2.99 allows it** and **PL-3 forbids it**.
+
+Locking RR: long locks on rows read, short lock on the predicate, so the INSERT is not blocked.
+
+</div>
+</div>
+
+<!--
+Real systems: Postgres RR (snapshot isolation) reads the total from T1's snapshot → 20, no anomaly here.
+MySQL InnoDB RR: plain SELECTs also use a snapshot; locking reads (FOR SHARE / FOR UPDATE) take next-key
+(gap) locks, which would block T2's INSERT. The "classic" phantom exists in lock-based RR without gap locks.
+-->
+
+---
+zoom: 0.92
+---
+
 # Mixed isolation levels
 
 Each transaction declares its own level. Build a **Mixed Serialization Graph (MSG)**:
@@ -561,12 +717,56 @@ Each transaction declares its own level. Build a **Mixed Serialization Graph (MS
 
 <div class="box mt-4">
 
-**Mixing-correct**: MSG is acyclic, and PL-2 / PL-3 transactions avoid G1a and G1b.
-**Mixing Theorem**: then every transaction gets the guarantees of its own level.
+**Check:** build the MSG. It must have no cycles, and PL-2 / PL-3 transactions must not have read aborted or intermediate versions.
+
+**Promise (Mixing Theorem):** if the check passes, every transaction gets the guarantees of its own level, even when it runs alongside lower-level transactions.
 
 </div>
 
 A PL-3 transaction is no magic fix. If lower-level code writes inconsistent data, PL-3 will faithfully read that inconsistent data.
+
+---
+
+# Mixed levels example: same history, different verdict
+
+T2 runs at **PL-1** and moves money from x to y. T1 reads x, then y.
+
+```text
+r1(x0)  w2(x2) w2(y2) c2  r1(y2) c1
+```
+
+<div class="grid grid-cols-2 gap-8">
+<div>
+
+**T1 at PL-3**: not mixing-correct
+
+```mermaid {scale: 0.85}
+flowchart LR
+  T1 -- "rw (x), obligatory" --> T2
+  T2 -- "wr (y)" --> T1
+```
+
+The rw edge leaves a PL-3 transaction, so it stays in the MSG even though T2 is PL-1. Cycle → rejected.
+
+</div>
+<div>
+
+**T1 at PL-2**: mixing-correct
+
+```mermaid {scale: 0.85}
+flowchart LR
+  T2 -- "wr (y)" --> T1
+```
+
+rw edges out of PL-2 transactions are dropped. No cycle → allowed. T1 read only committed data, which is all PL-2 promises.
+
+</div>
+</div>
+
+<!--
+Paper §5.5, Definition 9 and the Mixing Theorem. Footnote 1: a PL-3 transaction is protected against
+concurrency, not against inconsistent data written earlier by lower-level transactions.
+-->
 
 ---
 layout: section
@@ -576,11 +776,12 @@ layout: section
 
 Connecting Adya’s framework to DDIA and to real databases
 
-<span class="new">ADDED</span>
 
 ---
+zoom: 0.88
+---
 
-# Common anomalies as cycle shapes <span class="new">ADDED</span>
+# Common anomalies as cycle shapes
 
 From Adya’s 1999 PhD thesis and the Hermitage test suite:
 
@@ -597,7 +798,7 @@ From Adya’s 1999 PhD thesis and the Hermitage test suite:
 
 ---
 
-# Read skew vs write skew <span class="new">ADDED</span>
+# Read skew vs write skew
 
 <div class="grid grid-cols-2 gap-8">
 <div>
@@ -643,8 +844,10 @@ This answers the original deck's discussion prompt: "What graph would a write-sk
 -->
 
 ---
+zoom: 0.88
+---
 
-# Snapshot Isolation in Adya’s terms <span class="new">ADDED</span>
+# Snapshot Isolation in Adya’s terms
 
 The ICDE paper only mentions SI. The thesis defines **PL-SI**:
 
@@ -661,7 +864,7 @@ Consequences:
 
 ---
 
-# From “detect cycles” to SSI (PostgreSQL SERIALIZABLE) <span class="new">ADDED</span>
+# From “detect cycles” to SSI (PostgreSQL SERIALIZABLE)
 
 **Theorem (Fekete et al., 2005):** every cycle under SI contains two *consecutive* rw edges between concurrent transactions.
 
@@ -681,8 +884,10 @@ This is Adya’s idea put to work: let operations overlap, and look at the *depe
 </div>
 
 ---
+zoom: 0.88
+---
 
-# What PostgreSQL actually provides <span class="new">ADDED</span>
+# What PostgreSQL actually provides
 
 <div class="small">
 
@@ -707,7 +912,7 @@ for constraint violations.
 
 ---
 
-# What the framework does *not* cover <span class="new">ADDED</span>
+# What the framework does *not* cover
 
 - **Running transactions.** The guarantees apply only at commit. An OCC transaction can observe an
   inconsistent state while it runs (a “zombie”), divide by zero, and then abort. The thesis adds variants for running transactions.
@@ -757,7 +962,7 @@ Adya, Liskov & O’Neil. *Generalized Isolation Level Definitions.* ICDE 2000.
 - Berenson, Bernstein, Gray, Melton, E. O’Neil, P. O’Neil. *A Critique of ANSI SQL Isolation Levels.* SIGMOD 1995.
 - Adya. *Weak Consistency: A Generalized Theory and Optimistic Implementations for Distributed Transactions.* PhD thesis, MIT, 1999.
 
-**Follow-ups** <span class="new">ADDED</span>
+**Follow-ups**
 - Fekete, Liarokapis, E. O’Neil, P. O’Neil, Shasha. *Making Snapshot Isolation Serializable.* TODS 2005.
 - Cahill, Röhm, Fekete. *Serializable Isolation for Snapshot Databases.* SIGMOD 2008.
 - Ports, Grittner. *Serializable Snapshot Isolation in PostgreSQL.* VLDB 2012.

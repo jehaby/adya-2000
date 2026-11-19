@@ -40,3 +40,28 @@
   margin-bottom: 0.7rem;
 }
 .mermaid { display: flex; justify-content: center; }
+
+/* Navigation bar (appears on hover): small, light gray, bottom-right */
+div.absolute.bottom-0:has(> nav) {
+  left: auto !important;
+  right: 0 !important;
+  transform: scale(0.75);
+  transform-origin: bottom right;
+}
+div.absolute.bottom-0:has(> nav) nav,
+div.absolute.bottom-0:has(> nav) nav * {
+  color: #8f8f8f !important;
+}
+div.absolute.bottom-0:has(> nav) nav > div {
+  background: transparent !important;
+  border-color: #eee !important;
+  box-shadow: none !important;
+}
+
+/* Mirrored presenter cursor: small and light gray */
+div.absolute.pointer-events-none.text-xl:has(> svg) {
+  font-size: 0.7rem !important;
+}
+div.absolute.pointer-events-none.text-xl > svg {
+  color: #c4c4c4 !important;
+}
